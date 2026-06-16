@@ -24,7 +24,8 @@ android {
         applicationId = "com.noh.swim_log"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // Samsung Health Data SDK는 Android 10(API 29) 이상 필요.
+        minSdk = 29
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -35,10 +36,22 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Samsung Health Data SDK — AAR을 android/app/libs/ 에 두면 자동 포함된다.
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
+    // suspend 브릿지 호출용 코루틴 + lifecycleScope.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
 }
