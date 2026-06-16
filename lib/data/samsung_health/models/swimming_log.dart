@@ -38,7 +38,8 @@ enum StrokeType {
 
 /// 한 수영 구간(반복 세트 그룹). SWOLF 계산의 입력 단위.
 class SwimmingInterval {
-  /// 세션 내 구간 인덱스(SDK `SwimmingInterval.interval`).
+  /// 세트 그룹 번호(SDK `SwimmingInterval.interval`) — 반복 세트 묶음 id.
+  /// 라이브 확인: 한 entry = 풀 길이 1바퀴(랩). 연속 세트면 전 항목이 동일 값(예: 모두 1).
   final int interval;
   final Duration duration;
   final int strokeCount;

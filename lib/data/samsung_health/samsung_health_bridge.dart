@@ -32,4 +32,11 @@ class SamsungHealthBridge {
     if (result == null) return null;
     return SwimmingLog.fromMap(result);
   }
+
+  /// 채널이 돌려준 **가공 전** Map(디버그/덤프용). 모델 파싱을 건너뛴다.
+  ///
+  /// `swim-bridge-dump` 스킬의 raw JSON 출력에 사용한다. 없으면 `null`.
+  Future<Map<String, dynamic>?> rawLatestPoolSwimming() {
+    return _channel.invokeMapMethod<String, dynamic>('getLatestPoolSwimming');
+  }
 }

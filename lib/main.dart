@@ -1,6 +1,15 @@
 import 'package:flutter/material.dart';
 
+import 'debug/swim_bridge_dump.dart';
+
+/// `--dart-define=DUMP_SWIM=true`일 때만 브릿지 덤프를 실행(dev 전용, UI 영향 없음).
+const _dumpBridge = bool.fromEnvironment('DUMP_SWIM');
+
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (_dumpBridge) {
+    dumpLatestPoolSwimming();
+  }
   runApp(const MyApp());
 }
 

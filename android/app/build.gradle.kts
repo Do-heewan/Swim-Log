@@ -1,6 +1,9 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
+    // Samsung Health Data SDK 데이터 클래스가 kotlinx-parcelize 런타임을 요구한다.
+    // (로컬 AAR은 transitive 의존성을 안 가져오므로 직접 제공.)
+    id("kotlin-parcelize")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -54,4 +57,6 @@ dependencies {
     // suspend 브릿지 호출용 코루틴 + lifecycleScope.
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
+    // SDK가 내부 직렬화에 gson을 쓴다(로컬 AAR transitive 미포함 → 직접 제공).
+    implementation("com.google.code.gson:gson:2.11.0")
 }

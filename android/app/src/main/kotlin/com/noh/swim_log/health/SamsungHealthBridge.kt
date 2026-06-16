@@ -1,6 +1,7 @@
 package com.noh.swim_log.health
 
 import android.app.Activity
+import android.util.Log
 import com.samsung.android.sdk.health.data.HealthDataService
 import com.samsung.android.sdk.health.data.HealthDataStore
 import com.samsung.android.sdk.health.data.error.ResolvablePlatformException
@@ -62,17 +63,30 @@ class SamsungHealthBridge(private val activity: Activity) {
             .setOrdering(Ordering.DESC)
             .build()
 
-        val latest = store.readData(request).dataList
+        Log.i(TAG, "readLatestPoolSwimming: querying $start .. $end")
+        val points = store.readData(request).dataList
+        val sessions = points
             .mapNotNull { it.getValue(DataType.ExerciseType.SESSIONS) }
             .flatten()
-            .filter {
-                it.exerciseType ==
-                    DataType.ExerciseType.PredefinedExerciseType.POOL_SWIMMING &&
-                    it.swimmingLog != null
-            }
-            .maxByOrNull { it.startTime }
-            ?: return null
+        val poolSessions = sessions.filter {
+            it.exerciseType ==
+                DataType.ExerciseType.PredefinedExerciseType.POOL_SWIMMING &&
+                it.swimmingLog != null
+        }
+        val latest = poolSessions.maxByOrNull { it.startTime }
 
-        return latest.toSwimmingLogMap()
+        // 덤프가 비어있을 때 원인(권한은 됐는데 세션이 없는 건지 등)을 좁히기 위한 진단 로그.
+        Log.i(
+            TAG,
+            "readLatestPoolSwimming: points=${points.size}, sessions=${sessions.size}, " +
+                "poolSwimming=${poolSessions.size}, " +
+                "intervals=${latest?.swimmingLog?.swimmingIntervals?.size ?: 0}",
+        )
+
+        return latest?.toSwimmingLogMap()
+    }
+
+    private companion object {
+        const val TAG = "SamsungHealthBridge"
     }
 }

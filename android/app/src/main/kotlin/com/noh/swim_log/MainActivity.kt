@@ -1,5 +1,6 @@
 package com.noh.swim_log
 
+import android.util.Log
 import androidx.lifecycle.lifecycleScope
 import com.noh.swim_log.health.SamsungHealthBridge
 import io.flutter.embedding.android.FlutterActivity
@@ -39,6 +40,7 @@ class MainActivity : FlutterActivity() {
             try {
                 result.success(block())
             } catch (e: Throwable) {
+                Log.e("SwimBridge", "MethodChannel 호출 실패", e)
                 result.error("SAMSUNG_HEALTH_ERROR", e.message, e.toString())
             }
         }
