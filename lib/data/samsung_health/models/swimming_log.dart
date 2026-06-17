@@ -112,4 +112,48 @@ class SwimmingLog {
           .toList(growable: false),
     );
   }
+
+  // ── 파생 지표 (요약 카드/분석용) ────────────────────────────────
+  // SDK 원본값에서 계산만 한다. Samsung Health에 다시 쓰지 않는다.
+
+  /// 랩(= 풀 1바퀴) 개수.
+  int get lengthCount => intervals.length;
+
+  /// 시작~종료 벽시계 경과 시간(휴식 포함).
+  Duration get elapsed => endTime.difference(startTime);
+
+  /// 휴식 시간 = 전체 경과 − 순수 수영 시간. [totalDuration]이 없으면 `null`.
+  /// 음수가 나오면 0으로 보정한다(데이터 오차 방어).
+  Duration? get restDuration {
+    final swim = totalDuration;
+    if (swim == null) return null;
+    final rest = elapsed - swim;
+    return rest.isNegative ? Duration.zero : rest;
+  }
+
+  /// 100m 평균 페이스. 순수 수영 시간을 거리로 환산. 거리/시간 미상이면 `null`.
+  Duration? get pacePer100m {
+    final dist = totalDistance;
+    final swim = totalDuration;
+    if (dist == null || dist <= 0 || swim == null) return null;
+    return Duration(milliseconds: (swim.inMilliseconds * 100 / dist).round());
+  }
+
+  /// 세션 평균 SWOLF(랩별 SWOLF의 산술평균). 구간이 없으면 `null`.
+  double? get averageSwolf {
+    if (intervals.isEmpty) return null;
+    final total = intervals.fold<int>(0, (sum, i) => sum + i.swolf);
+    return total / intervals.length;
+  }
+
+  /// 영법별 랩 수 분포. 랩 수가 많은 순으로 정렬해 반환.
+  Map<StrokeType, int> get strokeDistribution {
+    final counts = <StrokeType, int>{};
+    for (final i in intervals) {
+      counts.update(i.strokeType, (v) => v + 1, ifAbsent: () => 1);
+    }
+    final sorted = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return Map.fromEntries(sorted);
+  }
 }
