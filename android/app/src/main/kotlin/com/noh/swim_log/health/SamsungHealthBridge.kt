@@ -4,6 +4,7 @@ import android.app.Activity
 import android.util.Log
 import com.samsung.android.sdk.health.data.HealthDataService
 import com.samsung.android.sdk.health.data.HealthDataStore
+import com.samsung.android.sdk.health.data.data.entries.ExerciseSession
 import com.samsung.android.sdk.health.data.error.ResolvablePlatformException
 import com.samsung.android.sdk.health.data.permission.AccessType
 import com.samsung.android.sdk.health.data.permission.Permission
@@ -88,12 +89,17 @@ class SamsungHealthBridge(private val activity: Activity) {
         }
         val latest = poolSessions.maxByOrNull { it.startTime }
 
-        // 세션 구간 동안의 심박 시계열(권한 있을 때만). 세션 평균/최대 심박은 ExerciseSession 자체에 있음.
+        // 세션 동안의 심박 시계열. 1차 출처는 운동 세션 자체의 로그(ExerciseSession.log) —
+        // 운동 중 촘촘히 기록된 샘플이라 "이번 수영의 심박 추이"에 맞다(EXERCISE 권한만으로 충분).
+        // 로그가 비어 있을 때만 패시브 HEART_RATE 쿼리로 폴백한다(일상 심박이라 세션 구간엔 희소).
+        val logSeries = if (latest != null) extractSessionHeartRateSeries(latest) else emptyList()
         val heartRateSeries =
-            if (latest != null && isHeartRateGranted()) {
+            if (logSeries.size >= 2) {
+                logSeries
+            } else if (latest != null && isHeartRateGranted()) {
                 readHeartRateSeries(latest.startTime, latest.endTime)
             } else {
-                emptyList()
+                logSeries
             }
 
         // 덤프가 비어있을 때 원인(권한은 됐는데 세션이 없는 건지 등)을 좁히기 위한 진단 로그.
@@ -102,11 +108,27 @@ class SamsungHealthBridge(private val activity: Activity) {
             "readLatestPoolSwimming: points=${points.size}, sessions=${sessions.size}, " +
                 "poolSwimming=${poolSessions.size}, " +
                 "intervals=${latest?.swimmingLog?.swimmingIntervals?.size ?: 0}, " +
+                "logEntries=${latest?.log?.size ?: 0}, logHr=${logSeries.size}, " +
                 "hrSamples=${heartRateSeries.size}",
         )
 
         return latest?.toSwimmingLogMap(heartRateSeries)
     }
+
+    /**
+     * 운동 세션 자체의 시계열 로그([ExerciseSession.log])에서 심박(bpm)을 시간순으로 추출.
+     *
+     * 워치가 운동 중 기록한 샘플이라 "이번 세션의 심박 추이"에 정확히 대응한다.
+     * EXERCISE 읽기에 포함되므로 별도 HEART_RATE 권한이 필요 없다.
+     */
+    private fun extractSessionHeartRateSeries(session: ExerciseSession): List<Int> =
+        session.log.orEmpty()
+            .mapNotNull { entry ->
+                val bpm = entry.heartRate?.roundToInt()
+                if (bpm != null && bpm > 0) entry.timestamp to bpm else null
+            }
+            .sortedBy { it.first }
+            .map { it.second }
 
     /**
      * [start]~[end] 구간의 심박(bpm) 시계열을 시간순으로 반환. 권한이 있을 때만 호출한다.

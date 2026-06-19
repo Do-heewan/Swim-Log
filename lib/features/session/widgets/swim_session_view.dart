@@ -4,7 +4,7 @@
 //
 // 컨테이너(LatestSessionScreen)가 Scaffold·배경·새로고침을 제공하므로
 // 이 위젯은 스크롤되는 카드 목록만 책임진다.
-// 심박 데이터가 없으면(현재 브릿지 미제공) 심박 카드·랩 ♥ 열을 생략한다.
+// 심박 시계열이 없으면 심박 카드를, 랩별 심박이 없으면 ♥ 열을 생략한다.
 
 import 'package:flutter/material.dart';
 
@@ -260,8 +260,6 @@ class _HeartRateCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<SwimColors>()!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final zones = session.hrZones();
-    final zoneColors = [c.zoneLow, c.zoneMid, c.zoneHigh, c.zoneMax];
     return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -314,22 +312,6 @@ class _HeartRateCard extends StatelessWidget {
                 : const Color(0xFFEEF3F4),
             height: 108,
           ),
-          const SizedBox(height: 13),
-          Row(
-            children: [
-              for (var i = 0; i < zones.length; i++) ...[
-                if (i > 0) const SizedBox(width: 7),
-                Expanded(
-                  child: _zoneChip(
-                    zones[i].name,
-                    formatMmSs(zones[i].time),
-                    zoneColors[i],
-                    c,
-                  ),
-                ),
-              ],
-            ],
-          ),
         ],
       ),
     );
@@ -377,39 +359,6 @@ class _HeartRateCard extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _zoneChip(String name, String time, Color color, SwimColors c) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
-      decoration: BoxDecoration(
-        color: c.cardSubtle,
-        border: Border.all(color: c.cardBorder),
-        borderRadius: BorderRadius.circular(11),
-      ),
-      child: Column(
-        children: [
-          Text(
-            name,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            time,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              color: c.ink,
-              fontFeatures: tabularFigures,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

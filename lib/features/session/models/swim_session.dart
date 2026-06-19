@@ -2,8 +2,9 @@
 // 화면(추세 리포트) 전용 프레젠테이션 모델.
 // 데이터 레이어의 SwimmingLog(브릿지 원본)를 이 모델로 정규화해 UI에 주입한다.
 //
-// 심박(heart rate)은 현재 브릿지가 읽어오지 않으므로 모두 선택값(nullable / 빈 리스트)이다.
-// 데이터가 없으면 화면이 해당 요소(심박 카드·랩 ♥·심박 존)를 생략한다.
+// 심박(heart rate)은 세션 평균/최대 + 운동 중 시계열을 브릿지가 제공한다(선택값).
+// 시계열이 없으면 화면이 심박 카드를 생략한다. 랩별 심박은 SDK 미제공이라 표시하지 않는다.
+// 심박 존(저/중/고강도)은 삼성헬스가 최대심박·구간을 SDK로 노출하지 않아 다루지 않는다.
 
 import '../../../data/samsung_health/models/swimming_log.dart';
 
@@ -54,13 +55,6 @@ class SwimLap {
   double get seconds => time.inMilliseconds / 1000.0;
 }
 
-/// 심박 존 체류 시간 버킷.
-class HrZoneBucket {
-  final String name; // 저강도 / 중강도 / 고강도 / 최대
-  final Duration time;
-  const HrZoneBucket(this.name, this.time);
-}
-
 /// 한 번의 수영 세션 전체 (화면 입력).
 class SwimSession {
   final DateTime startTime;
@@ -98,7 +92,8 @@ class SwimSession {
 
   /// 브릿지 원본 [SwimmingLog]에서 화면용 세션을 만든다.
   ///
-  /// 심박은 브릿지가 제공하지 않으므로 비운다(null / 빈 리스트).
+  /// 심박 평균/최대/시계열은 [SwimmingLog]에서 그대로 옮기고,
+  /// 랩별 심박은 SDK가 제공하지 않으므로 null로 둔다.
   factory SwimSession.fromSwimmingLog(SwimmingLog log) {
     final poolLength = log.poolLength;
     final active = log.totalDuration ?? log.elapsed;
@@ -149,28 +144,6 @@ class SwimSession {
   SwimLap? get fastestLap => laps.isEmpty
       ? null
       : laps.reduce((a, b) => a.seconds <= b.seconds ? a : b);
-
-  /// 심박 존 체류 시간. maxHr(추정 최대심박)에 대한 %로 버킷팅.
-  /// 저강도 <70% / 중강도 70~80% / 고강도 80~90% / 최대 >90%
-  List<HrZoneBucket> hrZones({int maxHr = 190}) {
-    if (heartRateSeries.isEmpty) return const [];
-    final perSampleSec = elapsed.inSeconds / heartRateSeries.length;
-    final secs = <String, double>{'저강도': 0, '중강도': 0, '고강도': 0, '최대': 0};
-    for (final hr in heartRateSeries) {
-      final pct = hr / maxHr;
-      final key = pct < 0.70
-          ? '저강도'
-          : pct < 0.80
-          ? '중강도'
-          : pct < 0.90
-          ? '고강도'
-          : '최대';
-      secs[key] = secs[key]! + perSampleSec;
-    }
-    return secs.entries
-        .map((e) => HrZoneBucket(e.key, Duration(seconds: e.value.round())))
-        .toList();
-  }
 
   /// 후반부 피로도 인사이트: 마지막 N랩과 첫 N랩의 평균 페이스·SWOLF 차이.
   ({int paceDeltaSec, int swolfDelta}) fatigue({int window = 5}) {

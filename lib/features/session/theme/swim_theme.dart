@@ -30,7 +30,7 @@ class SwimColors extends ThemeExtension<SwimColors> {
   // 막대 그라데이션 (위→아래)
   final List<Color> bar;
 
-  // 심박 존 4색
+  // 영법 분포 막대 보조색 (zoneHigh/zoneLow 재사용)
   final Color zoneLow;
   final Color zoneMid;
   final Color zoneHigh;
