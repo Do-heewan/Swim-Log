@@ -52,6 +52,22 @@ Future<void> dumpLatestPoolSwimming() async {
       '| intervals=${intervals.length} | strokeTypes=$strokeTypes '
       '| SWOLF입력누락=$missingSwolfInputs',
     );
+
+    // 심박 진단 — 세션 집계(EXERCISE 권한)와 시계열(HEART_RATE 권한)이 채워졌는지 확인.
+    final hrSeries = (raw['heartRateSeries'] as List<dynamic>?) ?? const [];
+    final hrMin = hrSeries.isEmpty
+        ? null
+        : hrSeries.cast<num>().reduce((a, b) => a < b ? a : b);
+    final hrMax = hrSeries.isEmpty
+        ? null
+        : hrSeries.cast<num>().reduce((a, b) => a > b ? a : b);
+    debugPrint(
+      '$_tag 심박 | meanHeartRate=${raw['meanHeartRate']} '
+      '| maxHeartRate=${raw['maxHeartRate']} '
+      '| minHeartRate=${raw['minHeartRate']} '
+      '| heartRateSeries=${hrSeries.length}샘플'
+      '${hrSeries.isEmpty ? ' (없음 — 권한 미동의이거나 워치가 수영 중 심박 미기록)' : ' (범위 $hrMin~$hrMax bpm)'}',
+    );
   } on PlatformException catch (e) {
     // PLATFORM_NOT_INSTALLED / OLD_VERSION_PLATFORM / ERR_NO_USER_PERMISSION / 2003 등.
     debugPrint('$_tag 브릿지 오류 [${e.code}] ${e.message} | details=${e.details}');

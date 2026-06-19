@@ -634,7 +634,9 @@ class _LapTable extends StatelessWidget {
     final c = Theme.of(context).extension<SwimColors>()!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bestIdx = session.fastestLap?.index;
-    final hasHr = session.hasHeartRate;
+    // 랩별 심박은 SDK가 제공하지 않으므로, 실제로 값이 있을 때만 ♥ 열을 보인다.
+    // (세션 심박 카드는 시계열 기반이라 별개로 표시된다.)
+    final hasHr = session.laps.any((l) => l.avgHeartRate != null);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

@@ -29,12 +29,34 @@ void main() {
     expect(s.laps.first.distance, 50.0); // 랩 거리 = 풀 길이
   });
 
-  test('심박 데이터는 비어 있음(브릿지 미제공)', () {
+  test('심박 키가 없으면 비어 있음', () {
     final s = SwimSession.fromSwimmingLog(_buildLog());
     expect(s.hasHeartRate, isFalse);
     expect(s.avgHeartRate, isNull);
     expect(s.heartRateSeries, isEmpty);
     expect(s.laps.first.avgHeartRate, isNull);
+  });
+
+  test('심박 집계/시계열은 전달, 랩별 심박은 여전히 없음', () {
+    final log = SwimmingLog.fromMap({
+      'startTime': '2026-06-16T19:00:00.000Z',
+      'endTime': '2026-06-16T19:22:00.000Z',
+      'poolLength': 50,
+      'totalDistance': 150.0,
+      'totalDuration': 270000,
+      'intervals': [
+        {'interval': 1, 'durationMillis': 30000, 'strokeCount': 18, 'strokeType': 'FREESTYLE'},
+      ],
+      'meanHeartRate': 142.6, // Float→double로 전송됨
+      'maxHeartRate': 171.0,
+      'heartRateSeries': [120, 134, 150, 160],
+    });
+    final s = SwimSession.fromSwimmingLog(log);
+    expect(s.hasHeartRate, isTrue);
+    expect(s.avgHeartRate, 143); // 반올림
+    expect(s.maxHeartRate, 171);
+    expect(s.heartRateSeries, [120, 134, 150, 160]);
+    expect(s.laps.first.avgHeartRate, isNull); // 랩별은 SDK 미제공
   });
 
   test('100m 페이스(초) = 순수시간 ÷ (거리/100)', () {

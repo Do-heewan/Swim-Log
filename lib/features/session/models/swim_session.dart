@@ -137,10 +137,10 @@ class SwimSession {
       poolLength: poolLength,
       avgPacePer100Sec: avgPace,
       avgSwolf: (log.averageSwolf ?? 0).round(),
-      avgHeartRate: null,
-      maxHeartRate: null,
+      avgHeartRate: log.avgHeartRate?.round(),
+      maxHeartRate: log.maxHeartRate?.round(),
       laps: laps,
-      heartRateSeries: const [],
+      heartRateSeries: log.heartRateSeries,
       strokeDistribution: distribution,
     );
   }

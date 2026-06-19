@@ -84,6 +84,16 @@ class SwimmingLog {
   final Duration? totalDuration;
   final List<SwimmingInterval> intervals;
 
+  /// 세션 평균 심박(bpm). SDK가 제공하지 않으면 `null`.
+  final double? avgHeartRate;
+
+  /// 세션 최대 심박(bpm). 없으면 `null`.
+  final double? maxHeartRate;
+
+  /// 세션 구간의 심박(bpm) 시계열. 심박 권한이 없거나 기록이 없으면 빈 리스트.
+  /// SwimmingInterval에는 심박이 없어 랩별 심박은 제공하지 않는다.
+  final List<int> heartRateSeries;
+
   const SwimmingLog({
     required this.startTime,
     required this.endTime,
@@ -93,6 +103,9 @@ class SwimmingLog {
     required this.totalDistance,
     required this.totalDuration,
     required this.intervals,
+    this.avgHeartRate,
+    this.maxHeartRate,
+    this.heartRateSeries = const [],
   });
 
   factory SwimmingLog.fromMap(Map<dynamic, dynamic> map) {
@@ -109,6 +122,11 @@ class SwimmingLog {
           : Duration(milliseconds: (map['totalDuration'] as num).toInt()),
       intervals: rawIntervals
           .map((e) => SwimmingInterval.fromMap(e as Map<dynamic, dynamic>))
+          .toList(growable: false),
+      avgHeartRate: (map['meanHeartRate'] as num?)?.toDouble(),
+      maxHeartRate: (map['maxHeartRate'] as num?)?.toDouble(),
+      heartRateSeries: ((map['heartRateSeries'] as List<dynamic>?) ?? const [])
+          .map((e) => (e as num).toInt())
           .toList(growable: false),
     );
   }

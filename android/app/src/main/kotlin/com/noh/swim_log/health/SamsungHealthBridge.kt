@@ -9,9 +9,12 @@ import com.samsung.android.sdk.health.data.permission.AccessType
 import com.samsung.android.sdk.health.data.permission.Permission
 import com.samsung.android.sdk.health.data.request.DataType
 import com.samsung.android.sdk.health.data.request.DataTypes
+import com.samsung.android.sdk.health.data.request.InstantTimeFilter
 import com.samsung.android.sdk.health.data.request.LocalTimeFilter
 import com.samsung.android.sdk.health.data.request.Ordering
+import java.time.Instant
 import java.time.LocalDateTime
+import kotlin.math.roundToInt
 
 /**
  * Samsung Health Data SDK 브릿지 (읽기 전용).
@@ -28,24 +31,34 @@ class SamsungHealthBridge(private val activity: Activity) {
     private val exercisePermissions =
         setOf(Permission.of(DataTypes.EXERCISE, AccessType.READ))
 
-    /** ExerciseType 읽기 권한 요청. 이미 허용이면 즉시 true. 동의 후 실제 허용 여부를 반환. */
+    private val heartRatePermissions =
+        setOf(Permission.of(DataTypes.HEART_RATE, AccessType.READ))
+
+    // 한 번의 동의 화면에서 운동 + 심박을 함께 요청한다.
+    private val allPermissions = exercisePermissions + heartRatePermissions
+
+    /**
+     * 읽기 권한 요청(운동 + 심박). EXERCISE는 필수, HEART_RATE는 선택이다.
+     * 동의 후 **EXERCISE** 허용 여부를 반환한다(심박은 있으면 시계열을 추가로 제공).
+     */
     suspend fun requestExercisePermission(): Boolean {
-        if (store.getGrantedPermissions(exercisePermissions)
-                .containsAll(exercisePermissions)
-        ) {
-            return true
-        }
-        try {
-            // requestPermissions는 요청한 집합을 그대로 반환하므로, 동의 결과는 다시 조회한다.
-            store.requestPermissions(exercisePermissions, activity)
-        } catch (e: ResolvablePlatformException) {
-            // Samsung Health 업데이트/설정 등 해결 가능한 상태면 해결 화면을 띄운다.
-            if (e.hasResolution) e.resolve(activity)
-            return false
+        if (!store.getGrantedPermissions(allPermissions).containsAll(allPermissions)) {
+            try {
+                // requestPermissions는 요청한 집합을 그대로 반환하므로, 동의 결과는 다시 조회한다.
+                store.requestPermissions(allPermissions, activity)
+            } catch (e: ResolvablePlatformException) {
+                // Samsung Health 업데이트/설정 등 해결 가능한 상태면 해결 화면을 띄운다.
+                if (e.hasResolution) e.resolve(activity)
+                return false
+            }
         }
         return store.getGrantedPermissions(exercisePermissions)
             .containsAll(exercisePermissions)
     }
+
+    /** 심박 읽기 권한이 허용됐는지. */
+    private suspend fun isHeartRateGranted(): Boolean =
+        store.getGrantedPermissions(heartRatePermissions).containsAll(heartRatePermissions)
 
     /**
      * 최근 [lookbackDays]일 내 가장 최근 POOL_SWIMMING 세션을 JSON 직렬화 가능한 Map으로 반환.
@@ -75,15 +88,53 @@ class SamsungHealthBridge(private val activity: Activity) {
         }
         val latest = poolSessions.maxByOrNull { it.startTime }
 
+        // 세션 구간 동안의 심박 시계열(권한 있을 때만). 세션 평균/최대 심박은 ExerciseSession 자체에 있음.
+        val heartRateSeries =
+            if (latest != null && isHeartRateGranted()) {
+                readHeartRateSeries(latest.startTime, latest.endTime)
+            } else {
+                emptyList()
+            }
+
         // 덤프가 비어있을 때 원인(권한은 됐는데 세션이 없는 건지 등)을 좁히기 위한 진단 로그.
         Log.i(
             TAG,
             "readLatestPoolSwimming: points=${points.size}, sessions=${sessions.size}, " +
                 "poolSwimming=${poolSessions.size}, " +
-                "intervals=${latest?.swimmingLog?.swimmingIntervals?.size ?: 0}",
+                "intervals=${latest?.swimmingLog?.swimmingIntervals?.size ?: 0}, " +
+                "hrSamples=${heartRateSeries.size}",
         )
 
-        return latest?.toSwimmingLogMap()
+        return latest?.toSwimmingLogMap(heartRateSeries)
+    }
+
+    /**
+     * [start]~[end] 구간의 심박(bpm) 시계열을 시간순으로 반환. 권한이 있을 때만 호출한다.
+     *
+     * 각 데이터 포인트의 세부 샘플([DataType.HeartRateType.SERIES_DATA])을 펼치고,
+     * 세부 샘플이 없으면 포인트 대표값([DataType.HeartRateType.HEART_RATE])을 쓴다.
+     */
+    private suspend fun readHeartRateSeries(start: Instant, end: Instant): List<Int> {
+        val request = DataTypes.HEART_RATE.readDataRequestBuilder
+            .setInstantTimeFilter(InstantTimeFilter.of(start, end))
+            .setOrdering(Ordering.ASC)
+            .build()
+
+        val points = store.readData(request).dataList
+        val samples = mutableListOf<Pair<Instant, Int>>()
+        for (point in points) {
+            val series = point.getValue(DataType.HeartRateType.SERIES_DATA)
+            if (!series.isNullOrEmpty()) {
+                for (hr in series) {
+                    val bpm = hr.heartRate.roundToInt()
+                    if (bpm > 0) samples.add(hr.startTime to bpm)
+                }
+            } else {
+                val bpm = point.getValue(DataType.HeartRateType.HEART_RATE)?.roundToInt()
+                if (bpm != null && bpm > 0) samples.add(point.startTime to bpm)
+            }
+        }
+        return samples.sortedBy { it.first }.map { it.second }
     }
 
     private companion object {
