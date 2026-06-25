@@ -33,6 +33,25 @@ fun ExerciseSession.toSwimmingLogMap(heartRateSeries: List<Int>): Map<String, An
     )
 }
 
+/**
+ * 캘린더/목록용 경량 요약 Map. 상세(구간·심박 시계열)는 제외해 전송량을 줄인다.
+ * Dart `SwimSessionSummary.fromMap`과 키가 1:1로 일치한다.
+ *
+ * [startTime]은 상세 재조회의 키이므로, Dart는 이 문자열을 그대로 되돌려준다.
+ */
+fun ExerciseSession.toSummaryMap(): Map<String, Any?> {
+    val log: SwimmingLog? = swimmingLog
+    return mapOf(
+        "startTime" to startTime.toIso(),
+        "endTime" to endTime.toIso(),
+        "poolLength" to log?.poolLength,
+        "poolLengthUnit" to log?.poolLengthUnit,
+        "totalDistance" to log?.totalDistance,
+        "totalDuration" to log?.totalDuration?.toMillis(),
+        "lengthCount" to (log?.swimmingIntervals?.size ?: 0),
+    )
+}
+
 private fun SwimmingLog.SwimmingInterval.toMap(): Map<String, Any?> = mapOf(
     "interval" to interval,
     "durationMillis" to duration.toMillis(),

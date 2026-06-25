@@ -23,6 +23,17 @@ class MainActivity : FlutterActivity() {
                         launchOnMain(result) { bridge.requestExercisePermission() }
                     "getLatestPoolSwimming" ->
                         launchOnMain(result) { bridge.readLatestPoolSwimming() }
+                    "getPoolSwimmingSessions" ->
+                        launchOnMain(result) {
+                            bridge.readPoolSwimmingSessions(
+                                call.argument<String>("start")!!,
+                                call.argument<String>("end")!!,
+                            )
+                        }
+                    "getPoolSwimmingDetail" ->
+                        launchOnMain(result) {
+                            bridge.readPoolSwimmingDetail(call.argument<String>("startTime")!!)
+                        }
                     else -> result.notImplemented()
                 }
             }

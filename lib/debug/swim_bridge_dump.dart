@@ -74,4 +74,34 @@ Future<void> dumpLatestPoolSwimming() async {
   } catch (e, st) {
     debugPrint('$_tag 예기치 못한 오류: $e\n$st');
   }
+
+  // 마일스톤 6: 세션 목록(캘린더용) 쿼리 검증 — 최근 N개월 요약을 한 줄씩 출력.
+  await _dumpRecentSessions(bridge);
+}
+
+/// 최근 [months]개월 POOL_SWIMMING 세션 요약을 출력해 캘린더용 리스트 쿼리를 검증한다.
+Future<void> _dumpRecentSessions(
+  SamsungHealthBridge bridge, {
+  int months = 3,
+}) async {
+  try {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month - months, 1);
+    final end = DateTime(now.year, now.month + 1, 1);
+    final sessions = await bridge.getPoolSwimmingSessions(start, end);
+    debugPrint('$_tag 세션목록 | $start ~ $end | ${sessions.length}건');
+    for (final s in sessions) {
+      final pace = s.pacePer100m;
+      debugPrint(
+        '$_tag  · ${s.startTime} | ${s.distance.round()}m '
+        '| ${s.lengthCount}랩 | 풀 ${s.poolLength}${s.poolLengthUnit} '
+        '| 페이스 ${pace == null ? '-' : '${pace.inMinutes}:${(pace.inSeconds % 60).toString().padLeft(2, '0')}'}'
+        ' | key=${s.startTimeRaw}',
+      );
+    }
+  } on PlatformException catch (e) {
+    debugPrint('$_tag 세션목록 오류 [${e.code}] ${e.message}');
+  } catch (e, st) {
+    debugPrint('$_tag 세션목록 예기치 못한 오류: $e\n$st');
+  }
 }

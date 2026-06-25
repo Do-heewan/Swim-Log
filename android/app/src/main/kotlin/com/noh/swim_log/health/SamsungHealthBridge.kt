@@ -4,6 +4,7 @@ import android.app.Activity
 import android.util.Log
 import com.samsung.android.sdk.health.data.HealthDataService
 import com.samsung.android.sdk.health.data.HealthDataStore
+import com.samsung.android.sdk.health.data.data.HealthDataPoint
 import com.samsung.android.sdk.health.data.data.entries.ExerciseSession
 import com.samsung.android.sdk.health.data.error.ResolvablePlatformException
 import com.samsung.android.sdk.health.data.permission.AccessType
@@ -65,8 +66,7 @@ class SamsungHealthBridge(private val activity: Activity) {
      * 최근 [lookbackDays]일 내 가장 최근 POOL_SWIMMING 세션을 JSON 직렬화 가능한 Map으로 반환.
      * 없으면 null.
      *
-     * SDK는 read 단계의 type 필터/limit을 제공하지 않으므로(EXERCISE 전체를 읽음)
-     * 세션을 펼쳐서 클라이언트에서 필터·정렬한다.
+     * SDK read에 운동 타입 필터가 없어 EXERCISE 전체를 읽은 뒤 클라이언트에서 수영만 골라낸다.
      */
     suspend fun readLatestPoolSwimming(lookbackDays: Long = 90): Map<String, Any?>? {
         val end = LocalDateTime.now()
@@ -79,14 +79,7 @@ class SamsungHealthBridge(private val activity: Activity) {
 
         Log.i(TAG, "readLatestPoolSwimming: querying $start .. $end")
         val points = store.readData(request).dataList
-        val sessions = points
-            .mapNotNull { it.getValue(DataType.ExerciseType.SESSIONS) }
-            .flatten()
-        val poolSessions = sessions.filter {
-            it.exerciseType ==
-                DataType.ExerciseType.PredefinedExerciseType.POOL_SWIMMING &&
-                it.swimmingLog != null
-        }
+        val poolSessions = points.poolSwimmingSessions()
         val latest = poolSessions.maxByOrNull { it.startTime }
 
         // 세션 동안의 심박 시계열. 1차 출처는 운동 세션 자체의 로그(ExerciseSession.log) —
@@ -105,7 +98,7 @@ class SamsungHealthBridge(private val activity: Activity) {
         // 덤프가 비어있을 때 원인(권한은 됐는데 세션이 없는 건지 등)을 좁히기 위한 진단 로그.
         Log.i(
             TAG,
-            "readLatestPoolSwimming: points=${points.size}, sessions=${sessions.size}, " +
+            "readLatestPoolSwimming: points=${points.size}, " +
                 "poolSwimming=${poolSessions.size}, " +
                 "intervals=${latest?.swimmingLog?.swimmingIntervals?.size ?: 0}, " +
                 "logEntries=${latest?.log?.size ?: 0}, logHr=${logSeries.size}, " +
@@ -114,6 +107,71 @@ class SamsungHealthBridge(private val activity: Activity) {
 
         return latest?.toSwimmingLogMap(heartRateSeries)
     }
+
+    /**
+     * [startIso]~[endIso](로컬 날짜·시각, ISO-8601) 구간의 모든 POOL_SWIMMING 세션을
+     * **경량 요약** Map 리스트로 반환(최신순). 캘린더/목록용이라 심박·구간은 제외한다.
+     */
+    suspend fun readPoolSwimmingSessions(startIso: String, endIso: String): List<Map<String, Any?>> {
+        val start = LocalDateTime.parse(startIso)
+        val end = LocalDateTime.parse(endIso)
+
+        val request = DataTypes.EXERCISE.readDataRequestBuilder
+            .setLocalTimeFilter(LocalTimeFilter.of(start, end))
+            .setOrdering(Ordering.DESC)
+            .build()
+
+        val sessions = store.readData(request).dataList
+            .poolSwimmingSessions()
+            .sortedByDescending { it.startTime }
+        Log.i(TAG, "readPoolSwimmingSessions: $start..$end -> ${sessions.size} sessions")
+        return sessions.map { it.toSummaryMap() }
+    }
+
+    /**
+     * 시작 시각이 [startTimeIso](Instant ISO-8601)인 POOL_SWIMMING 세션 1건의 **전체 상세**
+     * (구간 + 심박)를 반환. 없으면 null. 세션 시각 ±1일로 좁혀 읽는다.
+     *
+     * [startTimeIso]는 [readPoolSwimmingSessions]가 준 `startTime` 문자열을 그대로 넘긴다.
+     */
+    suspend fun readPoolSwimmingDetail(startTimeIso: String): Map<String, Any?>? {
+        val target = Instant.parse(startTimeIso)
+        val request = DataTypes.EXERCISE.readDataRequestBuilder
+            .setInstantTimeFilter(
+                InstantTimeFilter.of(target.minusSeconds(DAY_SECONDS), target.plusSeconds(DAY_SECONDS)),
+            )
+            .setOrdering(Ordering.DESC)
+            .build()
+
+        val session = store.readData(request).dataList
+            .poolSwimmingSessions()
+            .firstOrNull { it.startTime == target }
+        if (session == null) {
+            Log.w(TAG, "readPoolSwimmingDetail: no session matching $startTimeIso")
+            return null
+        }
+
+        val logSeries = extractSessionHeartRateSeries(session)
+        val heartRateSeries =
+            if (logSeries.size >= 2) {
+                logSeries
+            } else if (isHeartRateGranted()) {
+                readHeartRateSeries(session.startTime, session.endTime)
+            } else {
+                logSeries
+            }
+        return session.toSwimmingLogMap(heartRateSeries)
+    }
+
+    /** EXERCISE 데이터 포인트들에서 수영 로그가 있는 POOL_SWIMMING 세션만 펼쳐 추출. */
+    private fun List<HealthDataPoint>.poolSwimmingSessions(): List<ExerciseSession> =
+        mapNotNull { it.getValue(DataType.ExerciseType.SESSIONS) }
+            .flatten()
+            .filter {
+                it.exerciseType ==
+                    DataType.ExerciseType.PredefinedExerciseType.POOL_SWIMMING &&
+                    it.swimmingLog != null
+            }
 
     /**
      * 운동 세션 자체의 시계열 로그([ExerciseSession.log])에서 심박(bpm)을 시간순으로 추출.
@@ -161,5 +219,6 @@ class SamsungHealthBridge(private val activity: Activity) {
 
     private companion object {
         const val TAG = "SamsungHealthBridge"
+        const val DAY_SECONDS = 86_400L
     }
 }
